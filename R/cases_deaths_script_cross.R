@@ -38,7 +38,7 @@ df <- ncov_data %>%
 # 4) Source (JHU, WHO)
 indicat_vec <- c("cases" ,  "deaths")
 metricx_vec <- c("countsx", "ratesx")
-periodx_vec <- c(1, 7, 14, 30, 999)
+periodx_vec <- c(1, 7, 14, 30, 900)
 sourcex_vec <- c("JHU", "WHO") 
 
 
@@ -53,7 +53,7 @@ track_ncov_cross <- function(indicat ,
     filter(indicator %in% indicat) %>% 
     group_by(country_code) %>%
     arrange(Date) %>% 
-    mutate(countsx =  case_when(periodx == 999 ~ cumval, 
+    mutate(countsx =  case_when(periodx == 900 ~ cumval, 
                       TRUE ~        cumval - lag(cumval, periodx))) %>% 
     ungroup() %>% 
     mutate(countsx = if_else(countsx < 0, 0, countsx)) %>% 

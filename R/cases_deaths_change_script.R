@@ -135,7 +135,7 @@ labels = c(
   
   # Binding the output dataframes together and cleaning names
   finaldfx <- dplyr::bind_rows(dchange) %>% 
-    filter(periodval %in% c("14 days", "30 days", "7 days")) %>% 
+    filter(periodval %in% c("10 days", "25 days", "5 days")) %>% 
     select(Indicator, periodval, data_source, 
            country_code, Date, pop, changecat, changecatx,
       change_val, perc_change, perc_changex, curr_val, prev_val,           
