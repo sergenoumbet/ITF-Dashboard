@@ -1,40 +1,103 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-#
-# See https://github.com/r-lib/actions/tree/master/examples#readme for
-# additional example workflows available for the R community.
-
-name: R
-
+# For help debugging build failures open an issue on the RStudio community with the 'github-actions' tag.
+# https://community.rstudio.com/new-topic?category=Package%20development&tags=github-actions
 on:
-  push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+  workflow_dispatch:
+  schedule:
+    # Run at 1535ET M-F (time in UTC, so offset by 5)
+    - cron: '35 19 * * 1,2,3,4,5'
 
-permissions:
-  contents: read
+name: "ITF Internal Dashboard Refresh"
 
 jobs:
-  build:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        r-version: ['3.6.3', '4.1.1']
+  itf-dashboard:
+    runs-on: ubuntu-latest
+    container: rocker/geospatial:4.3
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v3
-      - name: Set up R ${{ matrix.r-version }}
-        uses: r-lib/actions/setup-r@f57f1301a053485946083d7a45022b278929a78a
         with:
-          r-version: ${{ matrix.r-version }}
-      - name: Install dependencies
+          ref: "master"
+      - uses: r-lib/actions/setup-renv@v2
+        with:
+          cache-version: 2
+      - name: Run Data Pull
+        env:
+          _R_CHECK_CRAN_INCOMING_REMOTE_: false
         run: |
-          install.packages(c("remotes", "rcmdcheck"))
-          remotes::install_deps(dependencies = TRUE)
+          source("itf_dashboard/0_output_data.R")
         shell: Rscript {0}
-      - name: Check
-        run: rcmdcheck::rcmdcheck(args = "--no-manual", error_on = "error")
+      # Upload results for later
+      - uses: actions/upload-artifact@v3
+        with:
+          name: itf-dashboard
+          path: itf_dashboard/output/*.csv
+
+  covid-data-tracker:
+    runs-on: ubuntu-latest
+    container: rocker/geospatial:4.3
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: "master"
+      - uses: r-lib/actions/setup-renv@v2
+        with:
+          cache-version: 2
+      - name: Run Data Pull
+        env:
+          _R_CHECK_CRAN_INCOMING_REMOTE_: false
+        run: |
+          source("covid_data_tracker/0_output_data.R")
         shell: Rscript {0}
+      # Upload results for later
+      - uses: actions/upload-artifact@v3
+        with:
+          name: covid-data-tracker
+          path: covid_data_tracker/output/*.csv
+
+  publish:
+    runs-on: self-hosted
+    needs: [ itf-dashboard, covid-data-tracker ]
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: "master"
+    # Download data from the data pull runs
+    - uses: actions/download-artifact@v3
+      with:
+        name: itf-dashboard
+        path: itf_dashboard/output/
+    - uses: actions/download-artifact@v3
+      with:
+        name: covid-data-tracker
+        path: covid_data_tracker/output/
+    - name: Assigning Rtools, GS, and R to PATH
+      run: |
+        echo "C:\program files\gs\gs10.00.0\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        echo "C:\rtools40\ucrt64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        echo "C:\rtools40\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        echo "C:\R\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    - name: Install {pak}
+      run: |
+        install.packages('pak')
+      shell: Rscript {0}
+    - name: Install Minimal Publish Deps
+      run: |
+        pak::pkg_install(c('AzureStor', 'AzureRMR'))
+      shell: Rscript {0}
+    - name: Publish to ADLS
+      env:
+        _R_CHECK_CRAN_INCOMING_REMOTE_: false
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_APP_ID: ${{ secrets.AZURE_APP_ID }}
+        AZURE_APP_SECRET: ${{ secrets.AZURE_APP_SECRET }}
+        AZURE_DL_PATH: ${{ secrets.AZURE_DL_PATH }}
+      run: |
+        source(".github/workflows/export_data.R")
+      shell: Rscript {0}
