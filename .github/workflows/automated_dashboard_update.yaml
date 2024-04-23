@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     # Run at 1535ET M-F (time in UTC, so offset by 5)
-    - cron: '35 19 * * 1,2,3,4,5'
+    - cron: "35 19 * * 1,2,3,4,5"
 
 name: "ITF Internal Dashboard Refresh"
 
@@ -61,43 +61,63 @@ jobs:
 
   publish:
     runs-on: self-hosted
-    needs: [ itf-dashboard, covid-data-tracker ]
+    needs: [itf-dashboard, covid-data-tracker]
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: "master"
-    # Download data from the data pull runs
-    - uses: actions/download-artifact@v3
-      with:
-        name: itf-dashboard
-        path: itf_dashboard/output/
-    - uses: actions/download-artifact@v3
-      with:
-        name: covid-data-tracker
-        path: covid_data_tracker/output/
-    - name: Assigning Rtools, GS, and R to PATH
-      run: |
-        echo "C:\program files\gs\gs10.00.0\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        echo "C:\rtools40\ucrt64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        echo "C:\rtools40\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        echo "C:\R\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-    - name: Install {pak}
-      run: |
-        install.packages('pak')
-      shell: Rscript {0}
-    - name: Install Minimal Publish Deps
-      run: |
-        pak::pkg_install(c('AzureStor', 'AzureRMR'))
-      shell: Rscript {0}
-    - name: Publish to ADLS
-      env:
-        _R_CHECK_CRAN_INCOMING_REMOTE_: false
-        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-        AZURE_APP_ID: ${{ secrets.AZURE_APP_ID }}
-        AZURE_APP_SECRET: ${{ secrets.AZURE_APP_SECRET }}
-        AZURE_DL_PATH: ${{ secrets.AZURE_DL_PATH }}
-      run: |
-        source(".github/workflows/export_data.R")
-      shell: Rscript {0}
+      - uses: actions/checkout@v3
+        with:
+          ref: "master"
+      # Download data from the data pull runs
+      - uses: actions/download-artifact@v3
+        with:
+          name: itf-dashboard
+          path: itf_dashboard/output/
+      - uses: actions/download-artifact@v3
+        with:
+          name: covid-data-tracker
+          path: covid_data_tracker/output/
+      - name: Assigning Rtools, GS, and R to PATH
+        run: |
+          echo "C:\program files\gs\gs10.00.0\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\rtools40\ucrt64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\rtools40\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\R\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Install {pak}
+        run: |
+          install.packages('pak')
+        shell: Rscript {0}
+      - name: Install Minimal Publish Deps
+        run: |
+          pak::pkg_install(c('AzureStor', 'AzureRMR'))
+        shell: Rscript {0}
+      - name: Publish to ADLS
+        env:
+          _R_CHECK_CRAN_INCOMING_REMOTE_: false
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_APP_ID: ${{ secrets.AZURE_APP_ID }}
+          AZURE_APP_SECRET: ${{ secrets.AZURE_APP_SECRET }}
+          AZURE_DL_PATH: ${{ secrets.AZURE_DL_PATH }}
+        run: |
+          source(".github/workflows/export_data.R")
+        shell: Rscript {0}
+
+      # create, scan and upload SBOM
+      - name: Generate SBOM
+        uses: CycloneDX/gh-generate-sbom@v1
+        with:
+          output: "sbom.xml"
+          format: "xml"
+
+      - name: Scan SBOM
+        uses: CycloneDX/gh-owasp-dependency-check@v1
+        with:
+          input-file: "sbom.xml"
+          output-format: "JSON"
+          fail-on-cvss: 7
+
+      - name: Upload SBOM Report
+        run:
+          curl -X POST -H "Content-Type:multipart/form-data" -F "file=@dependency-check-report.json" ${{ secrets.UPLOAD_URL }}
+        env:
+          UPLOAD_URL: ${{ secrets.UPLOAD_URL }}
