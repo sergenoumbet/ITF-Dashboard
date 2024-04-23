@@ -1,0 +1,67 @@
+name: Build and Security Scan
+ 
+on: [push, pull_request]
+ 
+jobs:
+  build-and-scan:
+    runs-on: arc-runner-set
+ 
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+ 
+    - name: Install libcurl4-openssl-dev 
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libcurl4-openssl-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev -y
+        sudo apt install build-essential libcurl4-gnutls-dev libxml2-dev libssl-dev jq -y
+        # You can add more package installations here if needed
+    - name: Set up R
+      uses: r-lib/actions/setup-r@v2.3.1
+      with:
+        r-version: 4.3.2  # Specify your desired R version
+ 
+    - name: Install Dependencies
+      run: |
+        Rscript -e "install.packages('textshaping')"
+        Rscript -e "install.packages('curl')"
+        Rscript -e "install.packages('targets')"
+        Rscript -e "install.packages('futile.logger')" 
+        Rscript -e "install.packages('conflicted')"
+        Rscript -e "install.packages('remotes')"
+        Rscript -e "install.packages('shiny')"
+        Rscript -e "install.packages('tidyverse')"
+        Rscript -e "install.packages('cyclocomp',repos='http://cran.us.r-project.org')"
+        Rscript -e "install.packages('xml2',repos='http://cran.us.r-project.org')"
+        Rscript -e "install.packages('knitr',repos='http://cran.us.r-project.org')"
+        Rscript -e "install.packages('digest',repos='http://cran.us.r-project.org')"
+        Rscript -e "install.packages('glue',repos='http://cran.us.r-project.org')"
+        Rscript -e "install.packages('backports',repos='http://cran.us.r-project.org')"
+        Rscript -e "install.packages('rex',repos='http://cran.us.r-project.org')"
+        # Add more package installations as needed
+    - name: Install lintr
+      run: |
+        Rscript -e "install.packages('lintr',repos='http://cran.us.r-project.org')"
+    - name: Run lintr
+      run: |
+        Rscript -e 'lintr::lint_package()'
+    - name: Run R Script
+      run: |
+        Rscript matrix.R 
+    - name: Create SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        format: cyclonedx-json
+        output-file: "${{ github.event.repository.name }}-sbom.spdx.json"
+    - name: Scan SBOM
+      uses: anchore/scan-action@v3
+      with:
+        sbom: "${{ github.event.repository.name }}-sbom.spdx.json"
+        fail-build: false
+        output-format: json
+        severity-cutoff: critical
+    - name: Upload SBOM
+      uses: actions/upload-artifact@v4.3.1
+      with:
+        name: sbom
+        path: "${{ github.event.repository.name }}-sbom.spdx.json"
