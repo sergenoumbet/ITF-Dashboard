@@ -102,34 +102,3 @@ jobs:
           source(".github/workflows/export_data.R")
         shell: Rscript {0}
 
-      # create, scan and upload SBOM
-    runs-on: ubuntu-latest
-
-     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Set Up JDK 11
-        uses: actions/setup-java@v3
-        with:
-         java-version: '11'
-         distribution: 'termurin'
-
-      - name: Generate SBOM
-        uses: CycloneDX/gh-generate-sbom@v1
-        with:
-          output: "sbom.xml"
-          format: "xml"
-
-      - name: Scan SBOM
-        uses: CycloneDX/gh-owasp-dependency-check@v1
-        with:
-          input-file: "sbom.xml"
-          output-format: "JSON"
-          fail-on-cvss: 7
-
-      - name: Upload SBOM Report
-        run:
-          curl -X POST -H "Content-Type:multipart/form-data" -F "file=@dependency-check-report.json" ${{ secrets.UPLOAD_URL }}
-        env:
-          UPLOAD_URL: ${{ secrets.UPLOAD_URL }}
