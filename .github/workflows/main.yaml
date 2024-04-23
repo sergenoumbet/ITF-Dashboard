@@ -25,8 +25,8 @@ jobs:
       run: |
         Rscript -e "install.packages('textshaping')"
         Rscript -e "install.packages('curl')"
-        Rscript -e "install.packages('targets')"
-        Rscript -e "install.packages('futile.logger')" 
+		      Rscript -e "install.packages('targets')"
+        Rscript -e "install.packages('futile.logger')"
         Rscript -e "install.packages('conflicted')"
         Rscript -e "install.packages('remotes')"
         Rscript -e "install.packages('shiny')"
@@ -48,7 +48,7 @@ jobs:
     - name: Run R Script
       run: |
         Rscript matrix.R 
-    - name: Create SBOM
+	- name: Create SBOM
       uses: anchore/sbom-action@v0
       with:
         format: cyclonedx-json
