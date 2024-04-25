@@ -25,7 +25,7 @@ jobs:
       run: |
         Rscript -e "install.packages('textshaping')"
         Rscript -e "install.packages('curl')"
-		      Rscript -e "install.packages('targets')"
+	Rscript -e "install.packages('targets')"
         Rscript -e "install.packages('futile.logger')"
         Rscript -e "install.packages('conflicted')"
         Rscript -e "install.packages('remotes')"
